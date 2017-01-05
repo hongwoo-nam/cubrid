@@ -3322,6 +3322,8 @@ do_execute_statement (PARSER_CONTEXT * parser, PT_NODE * statement)
   int suppress_repl_error;
   LC_FETCH_VERSION_TYPE read_fetch_instance_version;
 
+fprintf(stderr, "== do_execute_statement\n");
+
   assert (parser->query_id == NULL_QUERY_ID);
   /* save old read fetch instance version */
   read_fetch_instance_version = TM_TRAN_READ_FETCH_VERSION ();

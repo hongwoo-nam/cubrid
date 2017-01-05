@@ -1576,6 +1576,9 @@ qmgr_process_query (THREAD_ENTRY * thread_p, const XASL_ID * xasl_id, char *xasl
 #endif
   QFILE_LIST_ID *list_id;
 
+
+fprintf(stderr, "== qmgr_process_query\n");
+
   assert (query_p != NULL);
   assert (tran_entry_p != NULL);
 

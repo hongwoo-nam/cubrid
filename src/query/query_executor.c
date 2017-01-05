@@ -7659,6 +7659,12 @@ qexec_intprt_fnc (THREAD_ENTRY * thread_p, XASL_NODE * xasl, XASL_STATE * xasl_s
   bool count_star_with_iscan_opt = false;
   SCAN_OPERATION_TYPE scan_operation_type;
 
+/* hwnam: add to test */
+static unsigned int call_cnt = 0;
+fprintf(stderr, "=== [%10u] [%20u] qexec_intprt_fnc \n", call_cnt++, time(NULL) );
+/* */
+
+
   if (xasl->type == BUILDVALUE_PROC)
     {
       BUILDVALUE_PROC_NODE *buildvalue = &xasl->proc.buildvalue;
@@ -7721,8 +7727,26 @@ qexec_intprt_fnc (THREAD_ENTRY * thread_p, XASL_NODE * xasl, XASL_STATE * xasl_s
 
   while ((xb_scan = qexec_next_scan_block_iterations (thread_p, xasl)) == S_SUCCESS)
     {
+/* hwnam: add to test */
+unsigned int call_cnt3 = 0;
+static unsigned int call_cnt2 = 0;  
+fprintf(stderr, "== [%10u] [%20u] qexec_intprt_fnc: while qexec_next_scan_block_iterations \n", call_cnt2++, time(NULL));
+/* */
+
       while ((ls_scan = scan_next_scan (thread_p, &xasl->curr_spec->s_id)) == S_SUCCESS)
 	{
+/* hwnam: add to test */
+call_cnt3++;
+
+if (call_cnt3 > 1100000) 
+{
+fprintf(stderr, "***  while scan_next_scan: stopped: cnt > 1,100,000 \n\n\n", call_cnt3);
+        break;
+} else if (call_cnt3 < 3 || call_cnt3 % 100 == 0) {
+fprintf(stderr, "--- [%10u][%20u] qexec_intprt_fnc: while scan_next_scan \n", call_cnt3, time(NULL) );
+}
+/* */
+
 	  if (count_star_with_iscan_opt)
 	    {
 	      xasl->proc.buildvalue.agg_list->accumulator.curr_cnt += (&xasl->curr_spec->s_id)->s.isid.oids_count;
@@ -13146,6 +13170,10 @@ qexec_execute_mainblock_internal (THREAD_ENTRY * thread_p, XASL_NODE * xasl, XAS
   bool instant_lock_mode_started = false;
   bool mvcc_select_lock_needed;
 
+	static unsigned int cnt = 0;	 // hwnam: add
+
+fprintf(stderr, "=[%10u] == xasl->type[%5u], BUILDVALUE_PROC [%5u] \n",cnt++, xasl->type, BUILDVALUE_PROC);  // hwnam: add
+
   /* 
    * Pre_processing
    */
@@ -14161,6 +14189,8 @@ qexec_execute_query (THREAD_ENTRY * thread_p, XASL_NODE * xasl, int dbval_cnt, c
   int client_id = -1;
   char *db_user = NULL;
 #endif /* ENABLE_SYSTEMTAP */
+
+fprintf(stderr, "== qexec_execute_query\n");
 
 #if defined(CUBRID_DEBUG)
   {
