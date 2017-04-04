@@ -6171,7 +6171,7 @@ mq_rewrite_upd_del_top_level_specs (PARSER_CONTEXT * parser, PT_NODE * statement
 
       /* next! */
       /* to avoid segmentation fault */
-      if (*spec)
+      if (spec && *spec)
 	{
 	  spec = &((*spec)->next);
 	}
