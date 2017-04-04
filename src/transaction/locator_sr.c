@@ -224,9 +224,6 @@ static int locator_prefetch_index_page (THREAD_ENTRY * thread_p, OID * class_oid
 static int locator_prefetch_index_page_internal (THREAD_ENTRY * thread_p, BTID * btid, OID * class_oid,
 						 RECDES * classrec, RECDES * recdes);
 
-static int locator_check_primary_key_upddel (THREAD_ENTRY * thread_p, OID * class_oid, OID * inst_oid, RECDES * recdes,
-					     LOCATOR_INDEX_ACTION_FLAG idx_action_flag);
-
 static void locator_incr_num_transient_classnames (int tran_index);
 static void locator_decr_num_transient_classnames (int tran_index);
 static int locator_get_num_transient_classnames (int tran_index);
@@ -3923,7 +3920,7 @@ xlocator_does_exist (THREAD_ENTRY * thread_p, OID * oid, int chn, LOCK lock, LC_
   /* Quick fix: we need to check if OID is valid - meaning that page is still valid. This code is going to be
    * removed with one of the refactoring issues anyway.
    */
-  if (HEAP_ISVALID_OID (oid) != DISK_VALID)
+  if (HEAP_ISVALID_OID (thread_p, oid) != DISK_VALID)
     {
       return LC_DOESNOT_EXIST;
     }
@@ -4014,114 +4011,6 @@ void
 locator_end_force_scan_cache (THREAD_ENTRY * thread_p, HEAP_SCANCACHE * scan_cache)
 {
   heap_scancache_end_modify (thread_p, scan_cache);
-}
-
-
-/*
- * locator_check_primary_key_upddel () -
- *
- * return: NO_ERROR if all OK, ER_ status otherwise
- *
- *   thread_p(in):
- *   class_oid(in):
- *   inst_oid(in):
- *   recdes(in):
- *   idx_action_flag(in): is moving record between partitioned table? 
- *			 If FOR_MOVE, this delete(&insert) is caused by 
- *			 'UPDATE ... SET ...', NOT 'DELETE FROM ...'
- */
-static int
-locator_check_primary_key_upddel (THREAD_ENTRY * thread_p, OID * class_oid, OID * inst_oid, RECDES * recdes,
-				  LOCATOR_INDEX_ACTION_FLAG idx_action_flag)
-{
-  int num_found, i;
-  HEAP_CACHE_ATTRINFO index_attrinfo;
-  HEAP_IDX_ELEMENTS_INFO idx_info;
-  BTID btid;
-  DB_VALUE dbvalue;
-  DB_VALUE *key_dbvalue;
-  char buf[DBVAL_BUFSIZE + MAX_ALIGNMENT], *aligned_buf;
-  OR_INDEX *index;
-  bool is_null;
-  int error_code = NO_ERROR;
-
-  DB_MAKE_NULL (&dbvalue);
-
-  aligned_buf = PTR_ALIGN (buf, MAX_ALIGNMENT);
-
-  num_found = heap_attrinfo_start_with_index (thread_p, class_oid, NULL, &index_attrinfo, &idx_info);
-  if (num_found <= 0)
-    {
-      return error_code;
-    }
-
-  if (idx_info.has_single_col)
-    {
-      error_code = heap_attrinfo_read_dbvalues (thread_p, inst_oid, recdes, NULL, &index_attrinfo);
-      if (error_code != NO_ERROR)
-	{
-	  goto error;
-	}
-    }
-
-  for (i = 0; i < idx_info.num_btids; i++)
-    {
-      index = &(index_attrinfo.last_classrepr->indexes[i]);
-      if (index->type != BTREE_PRIMARY_KEY || index->fk == NULL)
-	{
-	  continue;
-	}
-
-      key_dbvalue =
-	heap_attrvalue_get_key (thread_p, i, &index_attrinfo, recdes, &btid, &dbvalue, aligned_buf, NULL, NULL);
-      if (key_dbvalue == NULL)
-	{
-	  error_code = ER_FAILED;
-	  goto error;
-	}
-
-      if (index->n_atts > 1)
-	{
-	  is_null = btree_multicol_key_is_null (key_dbvalue);
-	}
-      else
-	{
-	  is_null = DB_IS_NULL (key_dbvalue);
-	}
-
-      if (!is_null)
-	{
-	  switch (idx_action_flag)
-	    {
-	    case FOR_MOVE:
-	      error_code = locator_check_primary_key_update (thread_p, index, key_dbvalue);
-	      if (error_code != NO_ERROR)
-		{
-		  goto error;
-		}
-	      break;
-	    case FOR_INSERT_OR_DELETE:
-	      error_code = locator_check_primary_key_delete (thread_p, index, key_dbvalue);
-	      if (error_code != NO_ERROR)
-		{
-		  goto error;
-		}
-	      break;
-	    default:
-	      error_code = ER_FAILED;
-	      goto error;
-	    }
-	}
-    }
-
-error:
-  if (key_dbvalue == &dbvalue)
-    {
-      pr_clear_value (&dbvalue);
-    }
-
-  heap_attrinfo_end (thread_p, &index_attrinfo);
-  return error_code;
 }
 
 /*
@@ -5554,7 +5443,8 @@ locator_update_force (THREAD_ENTRY * thread_p, HFID * hfid, OID * class_oid, OID
 	  if (error_code == ER_FAILED)
 	    {
 	      ASSERT_ERROR_AND_SET (error_code);
-	      assert (false);
+	      /* FIXME: better to make functions to return ER_INTERRUPTED rather than ER_FAILED for the case */
+	      assert (error_code == ER_INTERRUPTED);
 	    }
 	  else
 	    {
@@ -6076,20 +5966,14 @@ error:
  *
  *   hfid(in): Heap where the object is going to be inserted
  *   oid(in): The object identifier
- *   has_index(in): false if we now for sure that there is not any index
- *                   on the instances of the class.
+ *   has_index(in): false if we now for sure that there is not any index on the instances of the class.
  *   op_type(in):
- *   scan_cache(in/out): Scan cache used to estimate the best space pages
- *                   between heap changes.
+ *   scan_cache(in/out): Scan cache used to estimate the best space pages between heap changes.
  *   force_count(in):
  *   mvcc_reev_data(in): MVCC data
- *   idx_action_flag(in): is moving record between partitioned table? 
- *			  If FOR_MOVE, this delete&insert is caused by 
- *			  'UPDATE ... SET ...', NOT 'DELETE FROM ...'
  *   need_locking(in): true, if need locking
  *
- * Note: The given object is deleted on this heap and all appropiate
- *              index entries are deleted.
+ * Note: The given object is deleted on this heap and all appropiate index entries are deleted.
  */
 int
 locator_delete_force (THREAD_ENTRY * thread_p, HFID * hfid, OID * oid, int has_index, int op_type,
@@ -6108,23 +5992,16 @@ locator_delete_force (THREAD_ENTRY * thread_p, HFID * hfid, OID * oid, int has_i
  *   thread_p(in):
  *   hfid(in): Heap where the object is going to be inserted
  *   oid(in): The object identifier
- *   has_index(in): false if we now for sure that there is not any index
- *                   on the instances of the class.
+ *   has_index(in): false if we now for sure that there is not any index on the instances of the class.
  *   op_type(in):
- *   scan_cache(in/out): Scan cache used to estimate the best space pages
- *                   between heap changes.
+ *   scan_cache(in/out): Scan cache used to estimate the best space pages between heap changes.
  *   force_count(in):
  *   mvcc_reev_data(in): MVCC data
- *   idx_action_flag(in): is moving record between partitioned table? 
- *			  If FOR_MOVE, this delete&insert is caused by 
- *			  'UPDATE ... SET ...', NOT 'DELETE FROM ...'
- *   new_obj_oid(in): next version - only to be used with records relocated in
- *				  other partitions, in MVCC.
+ *   new_obj_oid(in): next version - only to be used with records relocated in other partitions, in MVCC.
  *   partition_oid(in): new partition class oid
  *   need_locking(in): true, if need locking
  *
- * Note: The given object is deleted on this heap and all appropriate
- *              index entries are deleted.
+ * Note: The given object is deleted on this heap and all appropriate index entries are deleted.
  */
 static int
 locator_delete_force_for_moving (THREAD_ENTRY * thread_p, HFID * hfid, OID * oid, int has_index, int op_type,
@@ -6136,26 +6013,23 @@ locator_delete_force_for_moving (THREAD_ENTRY * thread_p, HFID * hfid, OID * oid
 }
 
 /*
+ * locator_delete_force_internal () - helper function of locator_delete_force
  *
  *   hfid(in): Heap where the object is going to be inserted
  *   oid(in): The object identifier
- *   has_index(in): false if we now for sure that there is not any index
- *                   on the instances of the class.
+ *   has_index(in): false if we now for sure that there is not any index on the instances of the class.
  *   op_type(in):
- *   scan_cache(in/out): Scan cache used to estimate the best space pages
- *                   between heap changes.
+ *   scan_cache(in/out): Scan cache used to estimate the best space pages between heap changes.
  *   force_count(in):
  *   mvcc_reev_data(in): MVCC data
  *   idx_action_flag(in): is moving record between partitioned table? 
  *			  If FOR_MOVE, this delete&insert is caused by 
  *			  'UPDATE ... SET ...', NOT 'DELETE FROM ...'
- *   new_obj_oid(in): next version - only to be used with records relocated in
- *				  other partitions, in MVCC.
+ *   new_obj_oid(in): next version - only to be used with records relocated in other partitions, in MVCC.
  *   partition_oid(in): new partition class oid
  *   need_locking(in): true, if need locking
  *
- * Note: The given object is deleted on this heap and all appropriate
- *              index entries are deleted.
+ * Note: The given object is deleted on this heap and all appropriate index entries are deleted.
  */
 static int
 locator_delete_force_internal (THREAD_ENTRY * thread_p, HFID * hfid, OID * oid, int has_index, int op_type,
@@ -6811,7 +6685,7 @@ locator_repl_add_error_to_copyarea (LC_COPYAREA ** copy_area, RECDES * recdes, L
   reply_obj = LC_FIND_ONEOBJ_PTR_IN_COPYAREA (reply_mobjs, reply_mobjs->num_objs);
 
   ptr = recdes->data;
-  ptr = or_pack_mem_value (ptr, key_value);
+  ptr = or_pack_mem_value (ptr, key_value, NULL);
   ptr = or_pack_int (ptr, err_code);
   ptr = or_pack_string (ptr, err_msg);
 
@@ -7715,9 +7589,6 @@ locator_was_index_already_applied (HEAP_CACHE_ATTRINFO * index_attrinfo, BTID * 
  *   need_replication(in): true if replication is needed
  *   hfid(in):
  *   func_preds(in): cached function index expressions
- *   idx_action_flag(in): is moving record between partitioned table?
- *			 If FOR_MOVE, this delete(&insert) is caused by
- *			 'UPDATE ... SET ...', NOT 'DELETE FROM ...'
  *
  * Note:Either insert indices (in_insert) or delete indices.
  */
@@ -7747,9 +7618,6 @@ locator_add_or_remove_index (THREAD_ENTRY * thread_p, RECDES * recdes, OID * ins
  *   need_replication(in): true if replication is needed
  *   hfid(in):
  *   func_preds(in): cached function index expressions
- *   idx_action_flag(in): is moving record between partitioned table?
- *			 If FOR_MOVE, this delete(&insert) is caused by
- *			 'UPDATE ... SET ...', NOT 'DELETE FROM ...'
  *
  * Note:Either insert indices (in_insert) or delete indices.
  */
@@ -9797,7 +9665,7 @@ locator_check_unique_btree_entries (THREAD_ENTRY * thread_p, BTID * btid, OID * 
 {
   DISK_ISVALID isvalid = DISK_VALID, isallvalid = DISK_VALID;
   OID inst_oid, *p_inst_oid = &inst_oid;
-  RECDES peek, *p_peek = &peek;
+  RECDES peek = RECDES_INITIALIZER, *p_peek = &peek;
   SCAN_CODE scan;
   HEAP_SCANCACHE *scan_cache = NULL;
   BTREE_CHECKSCAN bt_checkscan;
@@ -12971,7 +12839,7 @@ redistribute_partition_data (THREAD_ENTRY * thread_p, OID * class_oid, int no_oi
 	      else if (scan == S_END)
 		{
 		  /* move to next page */
-		  error = heap_vpid_next (&hfid, scan_cache.page_watcher.pgptr, &vpid);
+		  error = heap_vpid_next (thread_p, &hfid, scan_cache.page_watcher.pgptr, &vpid);
 		  if (error != NO_ERROR)
 		    {
 		      goto exit;

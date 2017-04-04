@@ -1260,9 +1260,10 @@ $ LOADDB
 1191 Ejecucion stand-alone de aspirar finalizada.
 1192 La precision de %1$zu del valor excede lo maximo permitido %2$d
 1193 La longitud de la expresion de particion procesada excede lo maximo permitido (%1$d).
-1194 Unable to check file %1d|%2d because lock on class %3d|%4d|%5d is not immediately granted.
-1195 Ultimo error
-
+1194 Unable to check file %1$d|%2$d because lock on class %3$d|%4$d|%5$d is not immediately granted.
+1195 The recursive part of a CTE should not contain aggregate functions without GROUP BY clause.
+1196 Maximum recursions %1$d reached executing CTE.
+1197 Ultimo error
 $set 6 MSGCAT_SET_INTERNAL
 1 Error en subsistema de error (linea %1$d):
 2 Ningun mensaje de error disponible.
@@ -1713,7 +1714,12 @@ $set 8 MSGCAT_SET_PARSER_SEMANTIC
 292 Uso invalido de funciones de agregado.
 293 El valor debe ser estrictamente cresciente para cada particion.
 294 No se pueden utilizar indices de funcion o filtro en columnas cuyo tipo de datos es dependiente de la zona horaria.
-295 This inline view is not updatable.
+295 SELECT INTO is not allowed in subqueries.
+296 CTE name ambiguity, there are more than one CTEs with the same name: '%1$s'.
+297 Nested WITH clauses are not supported.
+298 Recursive CTE '%1$s' must be referenced directly in its recursive query.
+299 Error in CTE '%1$s': The non-recursive part and the recursive part must be connected with UNION ALL.
+300 This inline view is not updatable.
 
 $set 9 MSGCAT_SET_PARSER_RUNTIME
 1 Sin memoria virtual: incapaz de asignar %1$d bytes.
