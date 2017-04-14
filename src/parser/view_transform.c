@@ -1161,7 +1161,8 @@ mq_updatable_local (PARSER_CONTEXT * parser, PT_NODE * statement, DB_OBJECT *** 
 	  local = PT_NOT_UPDATABLE;
 	  break;
 
-	default:		/* most of sql statements are updatable */
+          /* most of sql statements are updatable */
+	default:		
 	  local &= PT_UPDATABLE;
 	  break;
 	}
@@ -2380,8 +2381,10 @@ mq_translate_tree (PARSER_CONTEXT * parser, PT_NODE * tree, PT_NODE * spec_list,
 	      return NULL;	/* authorization fails */
 	    }
 	}
-      else if (class_spec->info.spec.meta_class != PT_META_CLASS
-	       && (class_spec->info.spec.derived_table_type != PT_IS_WHACKED_SPEC))
+      /* commented to allow view expansion in a inline view */
+      /* else */
+      if (class_spec->info.spec.meta_class != PT_META_CLASS
+	  && (class_spec->info.spec.derived_table_type != PT_IS_WHACKED_SPEC))
 	{
 	  for (entity = class_spec->info.spec.flat_entity_list; entity != NULL; entity = entity->next)
 	    {
@@ -6112,7 +6115,9 @@ mq_rewrite_upd_del_top_level_specs (PARSER_CONTEXT * parser, PT_NODE * statement
 	  bool multiple_entity = (entity != NULL && entity->next != NULL);
 	  bool rewrite = false, has_vclass = false;
 
-	  assert (!PT_SPEC_IS_CTE (*spec) && !PT_SPEC_IS_DERIVED (*spec));
+	  /* commented to allow view expansion in a inline view */
+	  /* assert (!PT_SPEC_IS_CTE (*spec) && !PT_SPEC_IS_DERIVED (*spec)); */
+
 
 	  while (entity)
 	    {

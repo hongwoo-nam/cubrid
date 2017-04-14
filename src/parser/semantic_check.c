@@ -9696,11 +9696,12 @@ pt_semantic_check_local (PARSER_CONTEXT * parser, PT_NODE * node, void *arg, int
 
 	  if (entity->info.spec.derived_table != NULL)
 	    {
-/* commented to allow inline view update */
-#if 0
+              /* commented to allow to execute inline view update */
+              /*
 	      PT_ERRORm (parser, node, MSGCAT_SET_PARSER_SEMANTIC, MSGCAT_SEMANTIC_UPDATE_DERIVED_TABLE);
 	      break;
-#endif
+              */
+
 	      /* check inline view updatability */
 	      if (mq_updatable (parser, entity->info.spec.derived_table) == PT_NOT_UPDATABLE)
 		{
@@ -9719,6 +9720,12 @@ pt_semantic_check_local (PARSER_CONTEXT * parser, PT_NODE * node, void *arg, int
 			  t_node->info.name.original);
 	      break;
 	    }
+	}
+
+      /* Let's avoid executing unnecessary statements below in case of errors */
+      if (pt_has_error (parser))
+	{
+	  break;
 	}
 
       /* Replace left to right attribute references in assignments before doing semantic check. The type checking phase 
