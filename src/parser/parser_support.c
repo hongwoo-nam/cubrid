@@ -10402,7 +10402,7 @@ pt_rewrite_derived_for_upd_del (PARSER_CONTEXT * parser, PT_NODE * spec, PT_SPEC
   /*
      if (spec->info.spec.flag & PT_SPEC_FLAG_CONTAINS_OID)
      {
-      return spec;
+     return spec;
      }
    */
 
@@ -10552,12 +10552,12 @@ pt_process_spec_for_update (PARSER_CONTEXT * parser, PT_NODE * spec, PT_NODE * n
   /* commented to allow inline view UPDATE */
   /* check derived table */
   /*
-  if (!(spec->info.spec.flag & PT_SPEC_FLAG_FROM_VCLASS))
-    {
-      PT_INTERNAL_ERROR (parser, "derived table not allowed");
-      return NULL;
-    }
-  */
+     if (!(spec->info.spec.flag & PT_SPEC_FLAG_FROM_VCLASS))
+     {
+     PT_INTERNAL_ERROR (parser, "derived table not allowed");
+     return NULL;
+     }
+   */
 
   if (dt_arg1->node_type == PT_UNION)
     {

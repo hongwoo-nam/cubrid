@@ -9696,11 +9696,11 @@ pt_semantic_check_local (PARSER_CONTEXT * parser, PT_NODE * node, void *arg, int
 
 	  if (entity->info.spec.derived_table != NULL)
 	    {
-              /* commented to allow to execute inline view update */
-              /*
-	      PT_ERRORm (parser, node, MSGCAT_SET_PARSER_SEMANTIC, MSGCAT_SEMANTIC_UPDATE_DERIVED_TABLE);
-	      break;
-              */
+	      /* commented to allow to execute inline view update */
+	      /*
+	         PT_ERRORm (parser, node, MSGCAT_SET_PARSER_SEMANTIC, MSGCAT_SEMANTIC_UPDATE_DERIVED_TABLE);
+	         break;
+	       */
 
 	      /* check inline view updatability */
 	      if (mq_updatable (parser, entity->info.spec.derived_table) == PT_NOT_UPDATABLE)
