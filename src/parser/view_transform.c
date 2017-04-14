@@ -1090,7 +1090,7 @@ mq_updatable_local (PARSER_CONTEXT * parser, PT_NODE * statement, DB_OBJECT *** 
 	    {
 	      PT_NODE *spec = statement->info.query.q.select.from;
 
-	      while (spec != NULL)
+	      while (spec != NULL && local != PT_NOT_UPDATABLE)	/* PT_NOT_UPDATABLE is added to avoid unncessary loop */
 		{
 		  if (spec->info.spec.derived_table != NULL)
 		    {
@@ -1102,9 +1102,10 @@ mq_updatable_local (PARSER_CONTEXT * parser, PT_NODE * statement, DB_OBJECT *** 
 			}
 		      else
 			{
-			  /* derived tables are not updatable */
-			  local = PT_NOT_UPDATABLE;
-			  break;
+			  /* added to allow inline view update */
+			  local &=
+			    mq_updatable_local (parser, spec->info.spec.derived_table, classes, num_classes, max);
+
 			}
 		    }
 		  spec = spec->next;
@@ -1154,8 +1155,15 @@ mq_updatable_local (PARSER_CONTEXT * parser, PT_NODE * statement, DB_OBJECT *** 
 	    }
 	  break;
 
-	default:
-	  local &= PT_NOT_UPDATABLE;
+	  /* added to explicitly disallow set operators */
+	case PT_INTERSECTION:
+	case PT_DIFFERENCE:
+	  local = PT_NOT_UPDATABLE;
+	  break;
+
+          /* most of sql statements are updatable */
+	default:		
+	  local &= PT_UPDATABLE;
 	  break;
 	}
 
@@ -2373,8 +2381,10 @@ mq_translate_tree (PARSER_CONTEXT * parser, PT_NODE * tree, PT_NODE * spec_list,
 	      return NULL;	/* authorization fails */
 	    }
 	}
-      else if (class_spec->info.spec.meta_class != PT_META_CLASS
-	       && (class_spec->info.spec.derived_table_type != PT_IS_WHACKED_SPEC))
+      /* commented to allow view expansion in a inline view */
+      /* else */
+      if (class_spec->info.spec.meta_class != PT_META_CLASS
+	  && (class_spec->info.spec.derived_table_type != PT_IS_WHACKED_SPEC))
 	{
 	  for (entity = class_spec->info.spec.flat_entity_list; entity != NULL; entity = entity->next)
 	    {
@@ -6082,7 +6092,7 @@ mq_rewrite_upd_del_top_level_specs (PARSER_CONTEXT * parser, PT_NODE * statement
       return statement;
     }
 
-  while (*spec)
+  while (spec && *spec)		/* NULL checking of 'spec' is added to avoid segmentation fault */
     {
       /* view definitions for select and for update might look different, so make sure to fetch the correct one */
       PT_FETCH_AS fetch_as = PT_SELECT;
@@ -6105,7 +6115,9 @@ mq_rewrite_upd_del_top_level_specs (PARSER_CONTEXT * parser, PT_NODE * statement
 	  bool multiple_entity = (entity != NULL && entity->next != NULL);
 	  bool rewrite = false, has_vclass = false;
 
-	  assert (!PT_SPEC_IS_CTE (*spec) && !PT_SPEC_IS_DERIVED (*spec));
+	  /* commented to allow view expansion in a inline view */
+	  /* assert (!PT_SPEC_IS_CTE (*spec) && !PT_SPEC_IS_DERIVED (*spec)); */
+
 
 	  while (entity)
 	    {
@@ -6163,7 +6175,15 @@ mq_rewrite_upd_del_top_level_specs (PARSER_CONTEXT * parser, PT_NODE * statement
 	}
 
       /* next! */
-      spec = &((*spec)->next);
+      /* to avoid segmentation fault */
+      if (spec && *spec)
+	{
+	  spec = &((*spec)->next);
+	}
+      else
+	{
+	  spec = NULL;
+	}
     }
 
   return statement;
