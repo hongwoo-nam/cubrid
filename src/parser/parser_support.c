@@ -10549,15 +10549,15 @@ pt_process_spec_for_update (PARSER_CONTEXT * parser, PT_NODE * spec, PT_NODE * n
       return name;
     }
 
-/* commented to allow inline view update */
-#if 0
+  /* commented to allow inline view UPDATE */
   /* check derived table */
+  /*
   if (!(spec->info.spec.flag & PT_SPEC_FLAG_FROM_VCLASS))
     {
       PT_INTERNAL_ERROR (parser, "derived table not allowed");
       return NULL;
     }
-#endif
+  */
 
   if (dt_arg1->node_type == PT_UNION)
     {
